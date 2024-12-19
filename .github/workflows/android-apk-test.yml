@@ -31,16 +31,16 @@ jobs:
           build-tools: '30.0.3'
 
       # 4. 下载 APK 文件
-      #- name: Download APK
-      #  run: |
-      #    mkdir -p apps
-      #    curl -o ./apps/caipiao-2.1.apk https://cache.ip138.com/app/caipiao-2.1.apk
+      - name: Download APK
+        run: |
+          mkdir -p apps
+          mkdir -p results
+          #curl -o ./apps/caipiao-2.1.apk https://cache.ip138.com/app/caipiao-2.1.apk
 
       # 5. 启动模拟器
       - name: Start Emulator
         run: |
           echo "Starting emulator..."
-          mkdir -p results
           nohup emulator -avd test -no-audio -no-window -gpu swiftshader_indirect > ./results/emulator.log 2>&1 &
           sleep 60
           adb wait-for-device
@@ -54,19 +54,29 @@ jobs:
 
       # 7. 测试 APK 是否成功安装
       - name: Verify APK Installation
-        run: adb shell pm list packages | grep "com.kaijiang.caipiao"
+        run: |
+          adb shell pm list packages | grep "com.kaijiang.caipiao"
+          if [ $? -ne 0 ]; then
+            echo "APK installation failed: Package not found!"
+            adb logcat -d >> ./results/log.txt
+            exit 1
+          fi
 
       # 8. 打开应用
       - name: Launch APK
         run: |
           adb shell monkey -p com.kaijiang.caipiao -c android.intent.category.LAUNCHER 1
+          if [ $? -ne 0 ]; then
+            echo "Failed to launch APK!"
+            adb logcat -d >> ./results/log.txt
+            exit 1  # 启动失败时退出工作流
+          fi
           sleep 10  # 等待应用加载完成
 
       # 9. 捕获日志
       - name: Capture Logcat
         run: |
-          mkdir -p results
-          adb logcat -d > ./results/log.txt
+          adb logcat -d >> ./results/log.txt
 
       # 10. 检查崩溃
       - name: Check for Crashes
@@ -81,7 +91,6 @@ jobs:
       # 11. 截图应用
       - name: Take Screenshot
         run: |
-          mkdir -p results
           adb exec-out screencap -p > ./results/screenshot.png
 
       # 12. 上传日志和截图
