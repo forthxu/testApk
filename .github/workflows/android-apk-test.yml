@@ -102,6 +102,6 @@ jobs:
 
       # 失败时通知
       - name: Notify on Failure
-        if: failure()  # 仅在失败时运行
+        if: failure() || cancelled()
         run: |
           curl -X GET https://notice.api.cn/notice/content/send/?text=teskApk&desp=${{ github.job }}%20fail&sendkey=${{ secrets.NOTICE_KEY }}
