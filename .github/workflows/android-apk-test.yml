@@ -1,0 +1,87 @@
+name: Download and Install APK
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  download-install-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 检查代码库
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      # 2. 设置 Java 环境
+      - name: Setup JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '11'
+
+      # 3. 设置 Android SDK
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+        with:
+          api-level: 30
+          build-tools: '30.0.3'
+
+      # 4. 下载 APK 文件
+      #- name: Download APK
+      #  run: |
+      #    mkdir -p apps
+      #    curl -o ./apps/caipiao-2.1.apk https://cache.ip138.com/app/caipiao-2.1.apk
+
+      # 5. 启动模拟器
+      - name: Start Emulator
+        run: |
+          echo "Starting emulator..."
+          nohup emulator -avd test -no-audio -no-window -gpu off &
+          adb wait-for-device
+        env:
+          AVD_NAME: "test"
+
+      # 6. 安装 APK
+      - name: Install APK
+        run: adb install ./apps/caipiao-2.1.apk
+
+      # 7. 测试 APK 是否成功安装
+      - name: Verify APK Installation
+        run: adb shell pm list packages | grep "com.kaijiang.caipiao"
+
+      # 8. 打开应用
+      - name: Launch APK
+        run: |
+          adb shell monkey -p com.kaijiang.caipiao -c android.intent.category.LAUNCHER 1
+          sleep 10  # 等待应用加载完成
+
+      # 9. 捕获日志
+      - name: Capture Logcat
+        run: |
+          mkdir -p results
+          adb logcat -d > ./results/log.txt
+
+      # 10. 检查崩溃
+      - name: Check for Crashes
+        run: |
+          if grep -i "FATAL EXCEPTION" ./results/log.txt; then
+            echo "App crashed! Check log.txt for details."
+            exit 1
+          else
+            echo "No crashes detected."
+          fi
+
+      # 11. 截图应用
+      - name: Take Screenshot
+        run: |
+          mkdir -p results
+          adb exec-out screencap -p > ./results/screenshot.png
+
+      # 12. 上传日志和截图
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: artifacts
+          path: ./results/
