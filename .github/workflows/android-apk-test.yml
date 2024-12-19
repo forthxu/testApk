@@ -38,8 +38,11 @@ jobs:
       - name: Start Emulator
         run: |
           echo "Starting emulator..."
-          nohup emulator -avd test -no-audio -no-window -gpu off &
+          mkdir -p results
+          nohup emulator -avd test -no-audio -no-window -gpu swiftshader_indirect > ./results/emulator.log 2>&1 &
+          sleep 60
           adb wait-for-device
+          adb devices
         env:
           AVD_NAME: "test"
 
