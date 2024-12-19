@@ -105,4 +105,4 @@ jobs:
       - name: Notify on Failure
         if: failure() || cancelled()
         run: |
-          curl -X GET https://notice.api.cn/notice/content/send/?text=teskApk&desp=${{ github.job }}%20fail&sendkey=${{ secrets.NOTICE_KEY }}
+          curl -X GET "https://notice.api.cn/notice/content/send/?text=teskApk&desp=${{ github.job }}%20fail&sendkey=${{ secrets.NOTICE_KEY }}"
