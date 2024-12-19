@@ -1,6 +1,8 @@
-name: Download and Install APK
+name: test APK
 
 on:
+  schedule:
+    - cron:  '0 0 * * MON'
   push:
     branches:
       - main
@@ -8,7 +10,7 @@ on:
 jobs:
   download-install-apk:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 30  # 设置超时时间为30分钟
     steps:
       # 1. 检查代码库
       - name: Checkout Code
@@ -88,3 +90,9 @@ jobs:
         with:
           name: artifacts
           path: ./results/
+
+      # 失败时通知
+      - name: Notify on Failure
+        if: failure()  # 仅在失败时运行
+        run: |
+          curl -X GET https://notice.api.cn/notice/content/send/?text=teskApk&desp=${{ github.job }}%20fail&sendkey=${{ secrets.NOTICE_KEY }}
