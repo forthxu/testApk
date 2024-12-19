@@ -8,7 +8,7 @@ on:
       - main
 
 jobs:
-  download-install-apk:
+  download-install-test-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 30  # 设置超时时间为30分钟
     steps:
