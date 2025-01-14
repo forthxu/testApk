@@ -46,7 +46,8 @@ jobs:
           sdkmanager "platform-tools" "emulator"  # 安装 emulator 工具
           #sdkmanager --list
           echo "create avd..."
-          avdmanager create avd -n test -k "system-images;android-30;google_apis;x86_64" -d "pixel"
+          avdmanager create avd -n test -k "system-images;android-30;google_apis;x86_64"
+          echo "list avd..."
           $ANDROID_SDK_ROOT/emulator/emulator -list-avds
 
       # 6. 启动模拟器
