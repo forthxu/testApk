@@ -51,7 +51,7 @@ jobs:
       - name: Start Emulator
         run: |
           echo "Starting emulator..."
-          nohup $ANDROID_SDK_ROOT/emulator -avd test -no-audio -no-window -gpu swiftshader_indirect 2>&1 > ./results/emulator.log 2>&1 &
+          nohup $ANDROID_SDK_ROOT/emulator/emulator -avd test -no-audio -no-window -gpu swiftshader_indirect 2>&1 > ./results/emulator.log 2>&1 &
           echo "Wait emulator..."
           adb wait-for-device
           adb devices
