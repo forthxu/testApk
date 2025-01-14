@@ -45,13 +45,13 @@ jobs:
           sdkmanager "system-images;android-30;google_apis;x86_64"  # 安装必要的系统镜像
           sdkmanager "platform-tools" "emulator"  # 安装 emulator 工具
           sdkmanager --list
-          ls $ANDROID_SDK_ROOT/emulator
+          #ls $ANDROID_SDK_ROOT/emulator
 
       # 6. 启动模拟器
       - name: Start Emulator
         run: |
           echo "Starting emulator..."
-          nohup emulator -avd test -no-audio -no-window -gpu swiftshader_indirect > ./results/emulator.log 2>&1 &
+          nohup $ANDROID_SDK_ROOT/emulator -avd test -no-audio -no-window -gpu swiftshader_indirect 2>&1 > ./results/emulator.log 2>&1 &
           echo "Wait emulator..."
           adb wait-for-device
           adb devices
