@@ -58,6 +58,11 @@ jobs:
           nohup $ANDROID_SDK_ROOT/emulator/emulator -avd test -no-audio -no-window -gpu swiftshader_indirect 2>&1 > ./results/emulator.log 2>&1 &
           echo "Wait emulator..."
           adb wait-for-device
+          until adb shell getprop sys.boot_completed | grep "1"; do
+              echo "等待模拟器启动完成..."
+              sleep 5
+          done
+          echo "Emulator is fully booted!"
           adb devices
         env:
           AVD_NAME: "test"
