@@ -44,7 +44,7 @@ jobs:
           echo "Starting emulator..."
           nohup emulator -avd test -no-audio -no-window -gpu swiftshader_indirect > ./results/emulator.log 2>&1 &
           echo "Wait emulator..."
-          #adb wait-for-device
+          adb wait-for-device
           adb devices
         env:
           AVD_NAME: "test"
@@ -96,6 +96,7 @@ jobs:
 
       # 12. 上传日志和截图
       - name: Upload Artifacts
+        if: always()
         uses: actions/upload-artifact@v3
         with:
           name: artifacts
