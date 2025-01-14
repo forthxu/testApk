@@ -21,22 +21,20 @@ jobs:
       - name: Setup JDK
         uses: actions/setup-java@v3
         with:
-          distribution: 'temurin'
           java-version: '17'
+          distribution: 'temurin'
 
       # 3. 设置 Android SDK
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v2
+        uses: android-actions/setup-android@v3
         with:
-          api-level: 33
-          build-tools: '30.0.3'
+          cmdline-tools-version: '12266719'
 
-      # 4. 下载 APK 文件
-      - name: Download APK
+      # 4. Install emulator
+      - name: Install Emulator
         run: |
-          mkdir -p apps
-          mkdir -p results
-          #curl -o ./apps/caipiao-2.1.apk https://cache.ip138.com/app/caipiao-2.1.apk
+          sdkmanager "system-images;android-30;google_apis;x86_64"  # 安装必要的系统镜像
+          sdkmanager "platform-tools" "emulator"  # 安装 emulator 工具
 
       # 5. 启动模拟器
       - name: Start Emulator
@@ -49,11 +47,18 @@ jobs:
         env:
           AVD_NAME: "test"
 
-      # 6. 安装 APK
+      # 6. 下载 APK 文件
+      - name: Download APK
+        run: |
+          mkdir -p apps
+          mkdir -p results
+          #curl -o ./apps/caipiao-2.1.apk https://cache.ip138.com/app/caipiao-2.1.apk
+
+      # 7. 安装 APK
       - name: Install APK
         run: adb install ./apps/caipiao-2.1.apk
 
-      # 7. 测试 APK 是否成功安装
+      # 8. 测试 APK 是否成功安装
       - name: Verify APK Installation
         run: |
           adb shell pm list packages | grep "com.kaijiang.caipiao"
@@ -63,7 +68,7 @@ jobs:
             exit 1
           fi
 
-      # 8. 打开应用
+      # 9. 打开应用
       - name: Launch APK
         run: |
           adb shell monkey -p com.kaijiang.caipiao -c android.intent.category.LAUNCHER 1
@@ -74,12 +79,12 @@ jobs:
           fi
           sleep 10  # 等待应用加载完成
 
-      # 9. 捕获日志
+      # 10. 捕获日志
       - name: Capture Logcat
         run: |
           adb logcat -d >> ./results/log.txt
 
-      # 10. 检查崩溃
+      # 11. 检查崩溃
       - name: Check for Crashes
         run: |
           if grep -i "FATAL EXCEPTION" ./results/log.txt; then
@@ -89,20 +94,20 @@ jobs:
             echo "No crashes detected."
           fi
 
-      # 11. 截图应用
+      # 12. 截图应用
       - name: Take Screenshot
         run: |
           adb exec-out screencap -p > ./results/screenshot.png
 
-      # 12. 上传日志和截图
+      # 13. 上传日志和截图
       - name: Upload Artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: artifacts
+          name: artifacts-results
           path: ./results/
 
-      # 失败时通知
+      # 14. 失败或者取消时通知
       - name: Notify on Failure
         if: failure() || cancelled()
         run: |
