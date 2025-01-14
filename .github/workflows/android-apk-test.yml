@@ -21,14 +21,14 @@ jobs:
       - name: Setup JDK
         uses: actions/setup-java@v3
         with:
-          distribution: 'zulu'
-          java-version: '11'
+          distribution: 'temurin'
+          java-version: '17'
 
       # 3. 设置 Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
         with:
-          api-level: 30
+          api-level: 33
           build-tools: '30.0.3'
 
       # 4. 下载 APK 文件
