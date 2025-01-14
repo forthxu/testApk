@@ -40,19 +40,19 @@ jobs:
       # 5. Install emulator
       - name: Install Emulator
         run: |
-          echo $ANDROID_SDK_ROOT
-          ls $ANDROID_SDK_ROOT/emulator
+          #echo $ANDROID_SDK_ROOT
+          #ls $ANDROID_SDK_ROOT/emulator
           sdkmanager "system-images;android-30;google_apis;x86_64"  # 安装必要的系统镜像
           sdkmanager "platform-tools" "emulator"  # 安装 emulator 工具
-          sdkmanager --list
+          #sdkmanager --list
+          echo "create avd..."
           avdmanager create avd -n test -k "system-images;android-30;google_apis;x86_64" -d "pixel"
-          #ls $ANDROID_SDK_ROOT/emulator
+          $ANDROID_SDK_ROOT/emulator/emulator -list-avds
 
       # 6. 启动模拟器
       - name: Start Emulator
         run: |
           echo "Starting emulator..."
-          $ANDROID_SDK_ROOT/emulator/emulator -list-avds
           nohup $ANDROID_SDK_ROOT/emulator/emulator -avd test -no-audio -no-window -gpu swiftshader_indirect 2>&1 > ./results/emulator.log 2>&1 &
           echo "Wait emulator..."
           adb wait-for-device
