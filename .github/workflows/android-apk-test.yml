@@ -17,26 +17,33 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # 2. 设置 Java 环境
+      # 2. 下载 APK 文件
+      - name: Download APK
+        run: |
+          mkdir -p apps
+          mkdir -p results
+          #curl -o ./apps/caipiao-2.1.apk https://cache.ip138.com/app/caipiao-2.1.apk
+
+      # 3. 设置 Java 环境
       - name: Setup JDK
         uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # 3. 设置 Android SDK
+      # 4. 设置 Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
           cmdline-tools-version: '12266719'
 
-      # 4. Install emulator
+      # 5. Install emulator
       - name: Install Emulator
         run: |
           sdkmanager "system-images;android-30;google_apis;x86_64"  # 安装必要的系统镜像
           sdkmanager "platform-tools" "emulator"  # 安装 emulator 工具
 
-      # 5. 启动模拟器
+      # 6. 启动模拟器
       - name: Start Emulator
         run: |
           echo "Starting emulator..."
@@ -46,13 +53,6 @@ jobs:
           adb devices
         env:
           AVD_NAME: "test"
-
-      # 6. 下载 APK 文件
-      - name: Download APK
-        run: |
-          mkdir -p apps
-          mkdir -p results
-          #curl -o ./apps/caipiao-2.1.apk https://cache.ip138.com/app/caipiao-2.1.apk
 
       # 7. 安装 APK
       - name: Install APK
