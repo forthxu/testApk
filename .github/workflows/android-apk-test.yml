@@ -36,6 +36,7 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           cmdline-tools-version: '12266719'
+          #packages: 'tools platform-tools emulator'
 
       # 5. Install emulator
       - name: Install Emulator
@@ -46,7 +47,7 @@ jobs:
           sdkmanager "platform-tools" "emulator"  # 安装 emulator 工具
           #sdkmanager --list
           echo "create avd..."
-          avdmanager create avd -n test -k "system-images;android-30;google_apis;x86_64"
+          avdmanager create avd -n test -k "system-images;android-30;google_apis;x86_64" -d "pixel"
           echo "list avd..."
           $ANDROID_SDK_ROOT/emulator/emulator -list-avds
 
