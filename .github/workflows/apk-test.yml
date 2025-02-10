@@ -104,6 +104,8 @@ jobs:
       # 7. 安装 APK
       - name: Install APK
         run: |
+          adb wait-for-device
+          echo "Emulator is fully booted!"
           adb install ./apps/caipiao-2.1.apk
 
       # 8. 测试 APK 是否成功安装
