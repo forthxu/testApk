@@ -86,8 +86,8 @@ jobs:
         id: avd-cache
         with:
           path: |
-            ~/.android/avd/*
-            ~/.android/adb*
+            ./results/.android/avd/*
+            ./results/.android/adb*
           key: avd-${{ matrix.api-level }} - ${{ matrix.arch }} - ${{ matrix.target }}
       - name: Create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
