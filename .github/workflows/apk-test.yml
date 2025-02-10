@@ -11,7 +11,13 @@ on:
 jobs:
   apk-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # 设置超时时间为30分钟
+    timeout-minutes: 15  # 设置超时时间为30分钟
+    strategy:
+      matrix:
+        api-level: [30]
+        # API 30+ emulators only have x86_64 system images.
+        arch: ["x86_64"]
+        target: [default]  # Other option: google_apis
     steps:
       # 1. 检查代码库
       - name: Checkout Code
@@ -32,12 +38,12 @@ jobs:
           distribution: 'temurin'
 
       # 4. 设置 Android SDK
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: '12266719'
-          #packages: 'tools platform-tools emulator'
-
+      # - name: Setup Android SDK
+      #   uses: android-actions/setup-android@v3
+      #   with:
+      #     cmdline-tools-version: '12266719'
+      #     #packages: 'tools platform-tools emulator'
+      # 
       # 5. Install emulator
       # - name: Install Emulator
       #   run: |
@@ -73,15 +79,27 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Download and Start Android Emulator
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+      - name: AVD cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ matrix.api-level }} - ${{ matrix.arch }} - ${{ matrix.target }}
+      - name: Create AVD and generate snapshot for caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
-          target: google_apis
-          arch: x86_64
-          profile: pixel
-          disable-animations: true
-          script: echo "Emulator is ready!"
+          api-level: ${{ matrix.api-level }}
+          arch: ${{ matrix.arch }}
+          target: ${{ matrix.target }}
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back none
+          disable-animations: false
+          script: echo "Generated AVD snapshot for caching."
 
       # 7. 安装 APK
       - name: Install APK
