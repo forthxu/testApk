@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  download-install-test-apk:
+  apk-test:
     runs-on: ubuntu-latest
     timeout-minutes: 30  # 设置超时时间为30分钟
     steps:
@@ -39,37 +39,49 @@ jobs:
           #packages: 'tools platform-tools emulator'
 
       # 5. Install emulator
-      - name: Install Emulator
-        run: |
-          #echo $ANDROID_SDK_ROOT
-          #ls $ANDROID_SDK_ROOT/emulator
-          sdkmanager "system-images;android-30;google_apis;x86_64"  # 安装必要的系统镜像
-          sdkmanager "platform-tools" "emulator"  # 安装 emulator 工具
-          #sdkmanager --list
-          echo "create avd..."
-          avdmanager --verbose create avd -n test -k "system-images;android-30;google_apis;x86_64" -d "pixel"
-          echo "list avd..."
-          $ANDROID_SDK_ROOT/emulator/emulator -list-avds
+      # - name: Install Emulator
+      #   run: |
+      #     #echo $ANDROID_SDK_ROOT
+      #     #ls $ANDROID_SDK_ROOT/emulator
+      #     sdkmanager "system-images;android-30;google_apis;x86_64"  # 安装必要的系统镜像
+      #     sdkmanager "platform-tools" "emulator"  # 安装 emulator 工具
+      #     #sdkmanager --list
+      #     echo "create avd..."
+      #     avdmanager --verbose create avd -n test -k "system-images;android-30;google_apis;x86_64" -d "pixel"
+      #     echo "list avd..."
+      #     $ANDROID_SDK_ROOT/emulator/emulator -list-avds
+      # 
+      # # 6. 启动模拟器
+      # - name: Start Emulator
+      #   run: |
+      #     echo "Starting emulator..."
+      #     nohup $ANDROID_SDK_ROOT/emulator/emulator -avd test -no-audio -no-window -gpu swiftshader_indirect 2>&1 > ./results/emulator.log 2>&1 &
+      #     echo "Wait emulator..."
+      #     adb wait-for-device
+      #     until adb shell getprop sys.boot_completed | grep "1"; do
+      #         echo "等待模拟器启动完成..."
+      #         sleep 5
+      #     done
+      #     echo "Emulator is fully booted!"
+      #     adb devices
+      #   env:
+      #     AVD_NAME: "test"
 
-      # 6. 启动模拟器
-      - name: Start Emulator
-        run: |
-          echo "Starting emulator..."
-          nohup $ANDROID_SDK_ROOT/emulator/emulator -avd test -no-audio -no-window -gpu swiftshader_indirect 2>&1 > ./results/emulator.log 2>&1 &
-          echo "Wait emulator..."
-          adb wait-for-device
-          until adb shell getprop sys.boot_completed | grep "1"; do
-              echo "等待模拟器启动完成..."
-              sleep 5
-          done
-          echo "Emulator is fully booted!"
-          adb devices
-        env:
-          AVD_NAME: "test"
+      # 5. 6. 安装启动模拟器
+      - name: Download and Start Android Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          profile: pixel
+          disable-animations: true
+          script: echo "Emulator is ready!"
 
       # 7. 安装 APK
       - name: Install APK
-        run: adb install ./apps/caipiao-2.1.apk
+        run: |
+          adb install ./apps/caipiao-2.1.apk
 
       # 8. 测试 APK 是否成功安装
       - name: Verify APK Installation
