@@ -102,9 +102,23 @@ fi
 echo "==> waiting ${WAIT_SECONDS}s for the app to settle"
 sleep "$WAIT_SECONDS"
 
+# 崩溃时打印关键堆栈，并识别「加固壳与模拟器 ABI 不匹配」这类环境问题
+explain_crash() {
+  adb logcat -d > "$RESULTS/log.txt" 2>&1 || true
+  grep -m1 -A 12 "FATAL EXCEPTION" "$RESULTS/log.txt" || true
+  if grep -qE "dlopen failed: .* is for EM_" "$RESULTS/log.txt"; then
+    echo "-----"
+    echo "崩溃原因是 native 库与模拟器 ABI 不匹配（常见于 360 加固包）："
+    echo "APK 只带 arm 库时会跑在 x86_64 镜像的 ARM 转译层上，而加固壳按设备 ABI 列表"
+    echo "释放了 x86_64 版 libjiagu，dlopen 架构不符导致启动即崩。"
+    echo "请把 vars.APP_URL 指向包含 x86_64 的 CI 专用构建（或未加固包）。"
+  fi
+}
+
 echo "==> checking process is alive"
 if [ -z "$(adb shell pidof "$PKG" | tr -d '\r')" ]; then
   echo "App is not running after launch!"
+  explain_crash
   exit 1
 fi
 
@@ -112,6 +126,7 @@ echo "==> checking crashes"
 adb logcat -d > "$RESULTS/log.txt"
 if grep -qE "FATAL EXCEPTION|ANR in $PKG" "$RESULTS/log.txt"; then
   echo "App crashed! Check log.txt for details."
+  explain_crash
   exit 1
 fi
 

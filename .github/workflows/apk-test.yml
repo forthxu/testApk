@@ -19,17 +19,19 @@ concurrency:
 
 jobs:
   apk-test:
-    # 用 Apple Silicon 的 macOS runner 跑 arm64-v8a 模拟器（公共仓库免费）。
-    # 被测 APK 只带 arm64-v8a/armeabi-v7a 库，且经过 360 加固：
-    # 在 x86_64 镜像的 ARM 转译层上，加固壳会按设备 ABI 列表错选 libjiagu_x64.so，
-    # 导致 dlopen "is for EM_X86_64 instead of EM_AARCH64" 启动即崩；
-    # Linux ARM runner 不可行（Google 不提供 linux-aarch64 模拟器），故改用 macOS。
-    runs-on: macos-latest
+    # 只能用 x86_64 模拟器：GitHub 托管 runner 跑不了 arm64-v8a 模拟器
+    # （macOS 托管 runner 无嵌套虚拟化，HVF error: HV_UNSUPPORTED；
+    #   Linux ARM runner 装不上 emulator；Google 不提供 linux-aarch64 模拟器）。
+    # 因此被测包需要是包含 x86_64 的 CI 专用构建：
+    # 只带 arm 库且经 360 加固的包，加固壳会错选 libjiagu_x64.so 而启动即崩。
+    runs-on: ubuntu-latest
     timeout-minutes: 45  # 首次需要创建 AVD 快照，15 分钟不够
     strategy:
       matrix:
         api-level: [30]
-        arch: ["arm64-v8a"]
+        # API 30+ emulators only have x86_64 system images.
+        arch: ["x86_64"]
+        # google_apis 镜像带 ARM 转译层，退一步也能装上只有 arm 库的包
         target: [google_apis]
     steps:
       # 1. 检查代码库
