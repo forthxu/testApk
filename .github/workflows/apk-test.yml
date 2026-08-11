@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write  # 需要把测试结果提交回仓库
+  contents: read  # 恢复 Commit results 步骤时需要改成 write
 
 concurrency:
   group: apk-test-${{ github.ref }}
@@ -19,15 +19,17 @@ concurrency:
 
 jobs:
   apk-test:
-    runs-on: ubuntu-latest
+    # 用 Apple Silicon 的 macOS runner 跑 arm64-v8a 模拟器（公共仓库免费）。
+    # 被测 APK 只带 arm64-v8a/armeabi-v7a 库，且经过 360 加固：
+    # 在 x86_64 镜像的 ARM 转译层上，加固壳会按设备 ABI 列表错选 libjiagu_x64.so，
+    # 导致 dlopen "is for EM_X86_64 instead of EM_AARCH64" 启动即崩；
+    # Linux ARM runner 不可行（Google 不提供 linux-aarch64 模拟器），故改用 macOS。
+    runs-on: macos-latest
     timeout-minutes: 45  # 首次需要创建 AVD 快照，15 分钟不够
     strategy:
       matrix:
         api-level: [30]
-        # API 30+ emulators only have x86_64 system images.
-        arch: ["x86_64"]
-        # 用 google_apis 而非 default(AOSP)：只带 arm64-v8a/armeabi-v7a 的 APK
-        # 需要 Google APIs x86_64 镜像自带的 ARM 转译层才能安装运行
+        arch: ["arm64-v8a"]
         target: [google_apis]
     steps:
       # 1. 检查代码库
@@ -83,8 +85,9 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # 5. 开启 KVM 硬件加速
+      # 5. 开启 KVM 硬件加速（仅 Linux runner 需要；macOS 上用的是 HVF）
       - name: Enable KVM
+        if: runner.os == 'Linux'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -138,39 +141,41 @@ jobs:
           if-no-files-found: warn
 
       # 10. 把最新一次的测试结果提交回仓库（成功失败都提交，只保留最新一次）
-      - name: Commit results
-        if: always()
-        run: |
-          set -euo pipefail
-          mkdir -p results
-          {
-            echo "run_number: ${{ github.run_number }}"
-            echo "run_id: ${{ github.run_id }}"
-            echo "event: ${{ github.event_name }}"
-            echo "commit: ${{ github.sha }}"
-            echo "status: ${{ job.status }}"
-            echo "apk: ${APK:-./apps/caipiao-2.1.apk}"
-            echo "finished_at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-            echo "run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          } > ./results/summary.txt
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A results
-          if git diff --cached --quiet; then
-            echo "No result changes to commit"
-            exit 0
-          fi
-          git commit -m "chore: apk test results (run #${{ github.run_number }}, ${{ job.status }})"
-          for i in 1 2 3; do
-            if git push origin "HEAD:refs/heads/${{ github.ref_name }}"; then
-              exit 0
-            fi
-            echo "push failed, retrying after rebase ($i)"
-            git pull --rebase --autostash origin "${{ github.ref_name }}" || true
-          done
-          echo "Failed to push results"
-          exit 1
+      #     暂时停用，结果只通过上面的 Upload Artifacts 提供下载
+      #     如需恢复：取消下面的注释，并把顶部 permissions 改回 contents: write
+      # - name: Commit results
+      #   if: always()
+      #   run: |
+      #     set -euo pipefail
+      #     mkdir -p results
+      #     {
+      #       echo "run_number: ${{ github.run_number }}"
+      #       echo "run_id: ${{ github.run_id }}"
+      #       echo "event: ${{ github.event_name }}"
+      #       echo "commit: ${{ github.sha }}"
+      #       echo "status: ${{ job.status }}"
+      #       echo "apk: ${APK:-./apps/caipiao-2.1.apk}"
+      #       echo "finished_at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+      #       echo "run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      #     } > ./results/summary.txt
+      #
+      #     git config user.name "github-actions[bot]"
+      #     git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      #     git add -A results
+      #     if git diff --cached --quiet; then
+      #       echo "No result changes to commit"
+      #       exit 0
+      #     fi
+      #     git commit -m "chore: apk test results (run #${{ github.run_number }}, ${{ job.status }})"
+      #     for i in 1 2 3; do
+      #       if git push origin "HEAD:refs/heads/${{ github.ref_name }}"; then
+      #         exit 0
+      #       fi
+      #       echo "push failed, retrying after rebase ($i)"
+      #       git pull --rebase --autostash origin "${{ github.ref_name }}" || true
+      #     done
+      #     echo "Failed to push results"
+      #     exit 1
 
       # 11. 失败或者取消时通知
       - name: Notify on Failure
