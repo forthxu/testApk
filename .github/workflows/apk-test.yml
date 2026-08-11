@@ -8,10 +8,13 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   apk-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15  # 设置超时时间为30分钟
+    timeout-minutes: 45  # 首次需要创建 AVD 快照，15 分钟不够
     strategy:
       matrix:
         api-level: [30]
@@ -21,74 +24,37 @@ jobs:
     steps:
       # 1. 检查代码库
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # 2. 下载 APK 文件
-      - name: Download APK
-        run: |
-          mkdir -p apps
-          mkdir -p results
-          #curl -o ./apps/caipiao-2.1.apk https://cache.ip138.com/app/caipiao-2.1.apk
+      # 2. 准备结果目录（APK 已随仓库提交在 apps/ 下）
+      - name: Prepare directories
+        run: mkdir -p results
 
       # 3. 设置 Java 环境
       - name: Setup JDK
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # 4. 设置 Android SDK
-      # - name: Setup Android SDK
-      #   uses: android-actions/setup-android@v3
-      #   with:
-      #     cmdline-tools-version: '12266719'
-      #     #packages: 'tools platform-tools emulator'
-      # 
-      # 5. Install emulator
-      # - name: Install Emulator
-      #   run: |
-      #     #echo $ANDROID_SDK_ROOT
-      #     #ls $ANDROID_SDK_ROOT/emulator
-      #     sdkmanager "system-images;android-30;google_apis;x86_64"  # 安装必要的系统镜像
-      #     sdkmanager "platform-tools" "emulator"  # 安装 emulator 工具
-      #     #sdkmanager --list
-      #     echo "create avd..."
-      #     avdmanager --verbose create avd -n test -k "system-images;android-30;google_apis;x86_64" -d "pixel"
-      #     echo "list avd..."
-      #     $ANDROID_SDK_ROOT/emulator/emulator -list-avds
-      # 
-      # # 6. 启动模拟器
-      # - name: Start Emulator
-      #   run: |
-      #     echo "Starting emulator..."
-      #     nohup $ANDROID_SDK_ROOT/emulator/emulator -avd test -no-audio -no-window -gpu swiftshader_indirect 2>&1 > ./results/emulator.log 2>&1 &
-      #     echo "Wait emulator..."
-      #     adb wait-for-device
-      #     until adb shell getprop sys.boot_completed | grep "1"; do
-      #         echo "等待模拟器启动完成..."
-      #         sleep 5
-      #     done
-      #     echo "Emulator is fully booted!"
-      #     adb devices
-      #   env:
-      #     AVD_NAME: "test"
-
-      # 5. 6. 安装启动模拟器
+      # 4. 开启 KVM 硬件加速
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Gradle cache
-        uses: gradle/actions/setup-gradle@v4
+
+      # 5. AVD 缓存（AVD 实际存放在 ~/.android 下）
       - name: AVD cache
         uses: actions/cache@v4
         id: avd-cache
         with:
           path: |
-            ./results/.android/avd/*
-            ./results/.android/adb*
-          key: avd-${{ matrix.api-level }} - ${{ matrix.arch }} - ${{ matrix.target }}
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ matrix.api-level }}-${{ matrix.arch }}-${{ matrix.target }}
+
+      # 6. 缓存未命中时创建 AVD 并生成快照
       - name: Create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
@@ -97,68 +63,78 @@ jobs:
           arch: ${{ matrix.arch }}
           target: ${{ matrix.target }}
           force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back none
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back none -camera-front none
           disable-animations: false
           script: echo "Generated AVD snapshot for caching."
 
-      # 7. 安装 APK
-      - name: Install APK
-        run: |
-          adb wait-for-device
-          echo "Emulator is fully booted!"
-          adb install ./apps/caipiao-2.1.apk
+      # 7. 在模拟器中安装、启动、抓日志、截图、查崩溃
+      #    注意：模拟器只在本步骤的 script 执行期间存活，所有 adb 操作必须写在这里
+      - name: Run APK test on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: ${{ matrix.arch }}
+          target: ${{ matrix.target }}
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back none -camera-front none
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            adb devices
+            adb logcat -c
 
-      # 8. 测试 APK 是否成功安装
-      - name: Verify APK Installation
-        run: |
-          adb shell pm list packages | grep "com.kaijiang.caipiao"
-          if [ $? -ne 0 ]; then
-            echo "APK installation failed: Package not found!"
-            adb logcat -d >> ./results/log.txt
-            exit 1
-          fi
+            echo "Installing APK..."
+            adb install -r -g ./apps/caipiao-2.1.apk
 
-      # 9. 打开应用
-      - name: Launch APK
-        run: |
-          adb shell monkey -p com.kaijiang.caipiao -c android.intent.category.LAUNCHER 1
-          if [ $? -ne 0 ]; then
-            echo "Failed to launch APK!"
-            adb logcat -d >> ./results/log.txt
-            exit 1  # 启动失败时退出工作流
-          fi
-          sleep 10  # 等待应用加载完成
+            echo "Verifying installation..."
+            if ! adb shell pm list packages | tr -d '\r' | grep -qx "package:com.kaijiang.caipiao"; then
+              echo "APK installation failed: Package not found!"
+              adb logcat -d > ./results/log.txt
+              exit 1
+            fi
 
-      # 10. 捕获日志
-      - name: Capture Logcat
-        run: |
-          adb logcat -d >> ./results/log.txt
+            echo "Launching APK..."
+            adb shell am start -W -n com.kaijiang.caipiao/.ui.main.MainActivity | tee ./results/launch.txt
+            sleep 15  # 等待应用加载完成
 
-      # 11. 检查崩溃
-      - name: Check for Crashes
-        run: |
-          if grep -i "FATAL EXCEPTION" ./results/log.txt; then
-            echo "App crashed! Check log.txt for details."
-            exit 1
-          else
+            adb exec-out screencap -p > ./results/screenshot.png
+            adb logcat -d > ./results/log.txt
+            adb shell dumpsys package com.kaijiang.caipiao > ./results/package.txt || true
+
+            if grep -q "Error:" ./results/launch.txt; then
+              echo "Failed to launch APK!"
+              exit 1
+            fi
+
+            if [ -z "$(adb shell pidof com.kaijiang.caipiao | tr -d '\r')" ]; then
+              echo "App is not running after launch!"
+              exit 1
+            fi
+
+            if grep -qE "FATAL EXCEPTION|ANR in com.kaijiang.caipiao" ./results/log.txt; then
+              echo "App crashed! Check log.txt for details."
+              exit 1
+            fi
+
             echo "No crashes detected."
-          fi
 
-      # 12. 截图应用
-      - name: Take Screenshot
-        run: |
-          adb exec-out screencap -p > ./results/screenshot.png
-
-      # 13. 上传日志和截图
+      # 8. 上传日志和截图
       - name: Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-results
           path: ./results/
+          if-no-files-found: warn
 
-      # 14. 失败或者取消时通知
+      # 9. 失败或者取消时通知
       - name: Notify on Failure
         if: failure() || cancelled()
+        env:
+          NOTICE_KEY: ${{ secrets.NOTICE_KEY }}
         run: |
-          curl -X GET "https://notice.api.cn/notice/content/send/?text=teskApk&desp=${{ github.job }}%20fail&sendkey=${{ secrets.NOTICE_KEY }}"
+          [ -n "${NOTICE_KEY}" ] || { echo "NOTICE_KEY not set, skip notify"; exit 0; }
+          curl -fsS -m 15 --get "https://notice.api.cn/notice/content/send/" \
+            --data-urlencode "text=testApk" \
+            --data-urlencode "desp=${{ github.job }} fail" \
+            --data-urlencode "sendkey=${NOTICE_KEY}" || true
