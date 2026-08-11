@@ -39,9 +39,15 @@ adb logcat -c || true
 packages_before="$(adb shell pm list packages | tr -d '\r' | sort)"
 
 echo "==> installing $APK"
-adb install -r "$APK" 2>&1 | tee "$RESULTS/install.txt"
-if grep -qi "Failure" "$RESULTS/install.txt"; then
+# adb install 失败时先把输出留下来再判断，否则 set -e 会让下面的诊断分支跑不到
+install_rc=0
+adb install -r "$APK" 2>&1 | tee "$RESULTS/install.txt" || install_rc=$?
+if [ "$install_rc" -ne 0 ] || grep -qi "Failure" "$RESULTS/install.txt"; then
   echo "APK installation failed!"
+  if grep -q "NO_MATCHING_ABIS" "$RESULTS/install.txt"; then
+    echo "APK 的 native lib 与模拟器 ABI 不匹配：$(adb shell getprop ro.product.cpu.abi | tr -d '\r')"
+    echo "请改用带 ARM 转译层的 google_apis x86_64 镜像，或换成匹配 ABI 的模拟器"
+  fi
   exit 1
 fi
 

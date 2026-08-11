@@ -26,7 +26,9 @@ jobs:
         api-level: [30]
         # API 30+ emulators only have x86_64 system images.
         arch: ["x86_64"]
-        target: [default]  # Other option: google_apis
+        # 用 google_apis 而非 default(AOSP)：只带 arm64-v8a/armeabi-v7a 的 APK
+        # 需要 Google APIs x86_64 镜像自带的 ARM 转译层才能安装运行
+        target: [google_apis]
     steps:
       # 1. 检查代码库
       - name: Checkout Code
@@ -42,17 +44,36 @@ jobs:
       - name: Download latest APK
         env:
           APP_URL: ${{ vars.APP_URL }}
+          # 服务端会按 UA 区分请求：默认的 curl/x.y UA 只会拿到一段 JSON 而不是 APK，
+          # 所以必须模拟浏览器 UA；需要时可用 vars.APP_UA 覆盖
+          APP_UA: ${{ vars.APP_UA }}
         run: |
           set -euo pipefail
           if [ -z "${APP_URL}" ]; then
             echo "APP_URL not set, using repo APK ./apps/caipiao-2.1.apk"
             exit 0
           fi
-          echo "Downloading latest APK from APP_URL..."
-          curl -fsSL --retry 3 --retry-delay 5 -m 600 -o ./apps/latest.apk "${APP_URL}"
+          UA="${APP_UA:-Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36}"
+          REFERER="$(printf '%s' "${APP_URL}" | sed -E 's#^(https?://[^/]+).*#\1/#')"
+          echo "Downloading latest APK from ${APP_URL}"
+          echo "UA: ${UA}"
+          http_code="$(curl -sSL --retry 3 --retry-delay 5 -m 600 \
+            -A "${UA}" \
+            -H "Accept: application/vnd.android.package-archive,application/octet-stream,*/*" \
+            -H "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8" \
+            -e "${REFERER}" \
+            -o ./apps/latest.apk -w '%{http_code} %{content_type}' "${APP_URL}")"
+          echo "HTTP response: ${http_code}"
           ls -l ./apps/latest.apk
-          # 简单校验：APK 必须是有效 zip 且含 AndroidManifest.xml（不匹配时 unzip 返回非 0）
-          unzip -l ./apps/latest.apk AndroidManifest.xml > /dev/null
+
+          # 注意：被拦截时服务端同样返回 200，只能靠内容判断是不是真的 APK
+          # （必须是有效 zip 且含 AndroidManifest.xml，不匹配时 unzip 返回非 0）
+          if ! unzip -l ./apps/latest.apk AndroidManifest.xml > /dev/null 2>&1; then
+            echo "Downloaded file is not a valid APK. First 500 bytes:"
+            head -c 500 ./apps/latest.apk || true
+            echo
+            exit 1
+          fi
           echo "APK=./apps/latest.apk" >> "$GITHUB_ENV"
 
       # 4. 设置 Java 环境
