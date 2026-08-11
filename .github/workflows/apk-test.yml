@@ -6,10 +6,16 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'results/**'  # 回写测试结果的提交不再触发本流程
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write  # 需要把测试结果提交回仓库
+
+concurrency:
+  group: apk-test-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   apk-test:
@@ -26,25 +32,44 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
 
-      # 2. 准备结果目录（APK 已随仓库提交在 apps/ 下）
+      # 2. 清空并准备结果目录（只保留最新一次结果，APK 已随仓库提交在 apps/ 下）
       - name: Prepare directories
-        run: mkdir -p results
+        run: |
+          rm -rf results
+          mkdir -p results
 
-      # 3. 设置 Java 环境
+      # 3. 配置了 vars.APP_URL 时下载最新版 APK，否则用仓库内的 APK
+      - name: Download latest APK
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_URL}" ]; then
+            echo "APP_URL not set, using repo APK ./apps/caipiao-2.1.apk"
+            exit 0
+          fi
+          echo "Downloading latest APK from APP_URL..."
+          curl -fsSL --retry 3 --retry-delay 5 -m 600 -o ./apps/latest.apk "${APP_URL}"
+          ls -l ./apps/latest.apk
+          # 简单校验：APK 必须是有效 zip 且含 AndroidManifest.xml（不匹配时 unzip 返回非 0）
+          unzip -l ./apps/latest.apk AndroidManifest.xml > /dev/null
+          echo "APK=./apps/latest.apk" >> "$GITHUB_ENV"
+
+      # 4. 设置 Java 环境
       - name: Setup JDK
         uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # 4. 开启 KVM 硬件加速
+      # 5. 开启 KVM 硬件加速
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # 5. AVD 缓存（AVD 实际存放在 ~/.android 下）
+      # 6. AVD 缓存（AVD 实际存放在 ~/.android 下）
       - name: AVD cache
         uses: actions/cache@v6
         id: avd-cache
@@ -54,7 +79,7 @@ jobs:
             ~/.android/adb*
           key: avd-${{ matrix.api-level }}-${{ matrix.arch }}-${{ matrix.target }}
 
-      # 6. 缓存未命中时创建 AVD 并生成快照
+      # 7. 缓存未命中时创建 AVD 并生成快照
       - name: Create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
@@ -67,7 +92,7 @@ jobs:
           disable-animations: false
           script: echo "Generated AVD snapshot for caching."
 
-      # 7. 在模拟器中安装、启动、抓日志、截图、查崩溃
+      # 8. 在模拟器中安装、启动、抓日志、截图、查崩溃
       #    注意：模拟器只在本步骤的 script 执行期间存活，所有 adb 操作必须写在这里
       - name: Run APK test on emulator
         uses: reactivecircus/android-emulator-runner@v2
@@ -79,9 +104,10 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-metrics -camera-back none -camera-front none
           disable-animations: true
           # 注意：这里的 script 由 sh(dash) 执行，必须显式用 bash 跑测试脚本
-          script: bash ./scripts/apk-test.sh
+          # APK 为空时脚本使用仓库内的 ./apps/caipiao-2.1.apk；包名与启动 Activity 由脚本自动识别
+          script: APK="${{ env.APK }}" bash ./scripts/apk-test.sh
 
-      # 8. 上传日志和截图
+      # 9. 上传日志和截图
       - name: Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v7
@@ -90,7 +116,42 @@ jobs:
           path: ./results/
           if-no-files-found: warn
 
-      # 9. 失败或者取消时通知
+      # 10. 把最新一次的测试结果提交回仓库（成功失败都提交，只保留最新一次）
+      - name: Commit results
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p results
+          {
+            echo "run_number: ${{ github.run_number }}"
+            echo "run_id: ${{ github.run_id }}"
+            echo "event: ${{ github.event_name }}"
+            echo "commit: ${{ github.sha }}"
+            echo "status: ${{ job.status }}"
+            echo "apk: ${APK:-./apps/caipiao-2.1.apk}"
+            echo "finished_at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > ./results/summary.txt
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A results
+          if git diff --cached --quiet; then
+            echo "No result changes to commit"
+            exit 0
+          fi
+          git commit -m "chore: apk test results (run #${{ github.run_number }}, ${{ job.status }})"
+          for i in 1 2 3; do
+            if git push origin "HEAD:refs/heads/${{ github.ref_name }}"; then
+              exit 0
+            fi
+            echo "push failed, retrying after rebase ($i)"
+            git pull --rebase --autostash origin "${{ github.ref_name }}" || true
+          done
+          echo "Failed to push results"
+          exit 1
+
+      # 11. 失败或者取消时通知
       - name: Notify on Failure
         if: failure() || cancelled()
         env:

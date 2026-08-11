@@ -1,1 +1,3 @@
 .DS_Store
+# 通过 secrets.APP_URL 下载的临时 APK，不提交进仓库
+apps/latest.apk
