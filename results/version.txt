@@ -1,0 +1,2 @@
+    versionCode=135 minSdk=21 targetSdk=34
+    versionName=1.3.5

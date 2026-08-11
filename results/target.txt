@@ -1,0 +1,3 @@
+apk: ./apps/latest.apk
+package: com.manyou.ipchaxun
+activity: com.manyou.ipchaxun/com.manyou.ip138.MainActivity

@@ -1,8 +1,8 @@
-run_number: 18
-run_id: 31470160390
+run_number: 19
+run_id: 31470601046
 event: push
-commit: e61b6a2ea006c913dab3d0c2487f88dbd3c89d81
+commit: 86d2e4c881786e98477a3a48b242a333c5db7a37
 status: failure
-apk: ./apps/caipiao-2.1.apk
-finished_at: 2026-08-11 07:44:07 UTC
-run_url: https://github.com/forthxu/testApk/actions/runs/31470160390
+apk: ./apps/latest.apk
+finished_at: 2026-08-11 07:53:09 UTC
+run_url: https://github.com/forthxu/testApk/actions/runs/31470601046

@@ -1,0 +1,6 @@
+Starting: Intent { cmp=com.manyou.ipchaxun/com.manyou.ip138.MainActivity }
+Status: ok
+LaunchState: UNKNOWN (-1)
+Activity: com.google.android.apps.nexuslauncher/.NexusLauncherActivity
+WaitTime: 688
+Complete
