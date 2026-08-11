@@ -5,7 +5,7 @@ on:
     - cron:  '0 0 * * MON'
   push:
     branches:
-      - main
+      - release
     paths-ignore:
       - 'results/**'  # 回写测试结果的提交不再触发本流程
   workflow_dispatch:
