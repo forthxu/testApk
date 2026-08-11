@@ -38,10 +38,17 @@ if grep -qi "Failure" "$RESULTS/install.txt"; then
 fi
 
 echo "==> verifying package $PKG"
-if ! adb shell pm list packages | tr -d '\r' | grep -qx "package:$PKG"; then
-  echo "APK installation failed: Package not found!"
-  exit 1
-fi
+# 注意：不要写成 `adb shell pm list packages | grep -q ...`，
+# grep -q 命中后立即退出会让上游 adb 收到 SIGPIPE，在 pipefail 下整条管道返回 141 造成误判
+packages="$(adb shell pm list packages | tr -d '\r')"
+printf '%s\n' "$packages" > "$RESULTS/packages.txt"
+case "$packages" in
+  *"package:$PKG"*) echo "package installed" ;;
+  *)
+    echo "APK installation failed: Package not found!"
+    exit 1
+    ;;
+esac
 
 echo "==> launching $ACTIVITY"
 adb shell am start -W -n "$ACTIVITY" 2>&1 | tee "$RESULTS/launch.txt"
